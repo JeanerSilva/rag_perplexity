@@ -207,14 +207,35 @@ if prompt := st.chat_input("Faça sua pergunta sobre os programas:"):
         if llm_choice == "Ollama":
             import ollama
 
-            response = ollama.chat(
-                model="llama3",
-                messages=[
-                    {"role": "system", "content": "Você é um assistente especialista em programas plurianuais."},
-                    {"role": "user", "content": prompt_template}
-                ]
-            )
-            response_text = response['message']['content']
+            model_name = "llama3"
+
+            try:
+                # Verifica se o modelo está disponível localmente
+                local_models = [m["name"] for m in ollama.list()["models"]]
+                if model_name not in local_models:
+                    st.error(f"O modelo '{model_name}' não está disponível localmente.")
+                    st.info(f"Execute no terminal: `ollama pull {model_name}`")
+                    raise RuntimeError(f"Modelo '{model_name}' ausente. Faça o pull manualmente.")
+
+                # Executa chat
+                response = ollama.chat(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": "Você é um assistente especializado na análise de documentos de planejamento público, com acesso a trechos documentos relativos ao Plano Plurianual (PPA).\nSeu trabalho é responder com base **exclusivamente no conteúdo abaixo**, sem usar conhecimento externo ou fazer suposições.\n\n📄 **Trechos do documento (contexto):**\n{context}\n\n❓ **Pergunta:**\n{question}\n \n📌 **Instruções de resposta**:\n\n- O conteúdo está no formato de jsonl. E cada linha contem metadados que indicam categorias como \"objetivo_geral\", \"objetivos_especificos\", \"objetivos_estrategicos\", \"publico_alvo\" e \"orgao_responsavel\" cada um deles se referindo a um \"programa_id\".\n\nSe houver pergunta que te leve a fazer uma lista, liste sempre todos os que se referem ao mesmo programa, sem exceção.\nPor exemplo, se for perguntado quais os objetivos estratégicos de um programa, como por exemplo 1144, todas linhas com a categoria \"objetivos_estrategicos\" com o programa \"programa_id\" 1144 devem ser listadas. Nenhuma pode não ser citada.\n- Se a resposta for objetiva e identificável nos trechos, **repita exatamente a mesma redação todas as vezes**. Não interrompa uma lista. Vá até o final.\n- Se algo não for pedido, não cite.\n- Se não forem pedidos objetivos específicos não cite. \n- Se a lista for longa, continue até o final, sem interromper ou resumir.\n- Considere o valor dos metadados de categoria para responder.\n- Se houver vários itens, liste todos os itens com uma lista numerada.\"\n- Não confunda os conceitos de \"gerais\", \"estratégicos\" e \"específicos\". Cada um deles deve ser tratado especificamente conforme o contexto defina.\n🔁 Agora responda:"},
+                        {"role": "user", "content": prompt_template}
+                    ]
+                )
+                response_text = response['message']['content']
+
+            except Exception as e:
+                st.error(f"Erro ao usar modelo Ollama: {e}")
+                response_text = "Não foi possível obter resposta do modelo Ollama."
+
+            with st.chat_message("assistant"):
+                st.markdown(response_text)
+
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
         elif llm_choice == "GPT-4":
             import openai
             response = openai.ChatCompletion.create(
