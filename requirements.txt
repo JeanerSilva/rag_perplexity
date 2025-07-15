@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+faiss-cpu
+sentence-transformers
+rank_bm25
+ollama
+nltk
+torch 
+torchvision 
+torchaudio
+openai
+langchain-huggingface
