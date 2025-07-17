@@ -4,32 +4,76 @@ from utils.index_utils import load_index_bundle
 from sentence_transformers import CrossEncoder
 import ollama
 from openai import OpenAI
+import re
+import json
 
 
-def inferir_tipos_relevantes(pergunta):
+def inferir_tipos_relevantes_regex(pergunta):
     pergunta = pergunta.lower()
     tipos = []
 
-    if "objetivo específico" in pergunta or "objetivos específicos" in pergunta:
+    if re.search(r"\bobjetiv[oa]s?\s+específic[oa]s?\b", pergunta):
         tipos.append("objetivo_especifico")
-    if "objetivo geral" in pergunta:
+    if re.search(r"\bobjetiv[oa]s?\s+gerais?\b", pergunta):
         tipos.append("objetivo_geral")
-    if "objetivo estratégico" in pergunta or "objetivos estratégicos" in pergunta:
+    if re.search(r"\bobjetiv[oa]s?\s+estratégic[oa]s?\b", pergunta):
         tipos.append("objetivo_estrategico")
-    if "problema" in pergunta:
+    if re.search(r"\bproblema\b|\bproblemas?\b", pergunta):
         tipos.append("problema")
-    if "causa" in pergunta:
+    if re.search(r"\bcausa\b|\bcausas\b", pergunta):
         tipos.append("causa")
-    if "justificativa" in pergunta:
+    if re.search(r"\bjustificativa\b|\bpor que\b|\bporque\b", pergunta):
         tipos.append("justificativa")
-    if "evidência" in pergunta or "evidencias" in pergunta:
+    if re.search(r"\bevid[êe]ncia\b|\bevid[êe]ncias\b", pergunta):
         tipos.append("evidencia")
-    if "entrega" in pergunta or "entregas" in pergunta:
+    if re.search(r"\bentregas?\b|\bresultados?\b", pergunta):
         tipos.append("entrega")
-    if "público-alvo" in pergunta or "público alvo" in pergunta:
+    if re.search(r"\bp[úu]blico[- ]?alvo\b", pergunta):
         tipos.append("publico_alvo")
+    if re.search(r"\bmarco legal\b", pergunta):
+        tipos.append("marco_legal")
+    if re.search(r"\barticula[çc][ãa]o federativa\b", pergunta):
+        tipos.append("articulacao_federativa")
 
     return tipos or None
+
+
+def inferir_tipos_com_llm(pergunta):
+    try:
+        client = OpenAI()
+        system_prompt = (
+            "Você é um classificador. Dada uma pergunta sobre planejamento público, identifique qual tipo de conteúdo ela solicita "
+            "dentre as seguintes categorias:\n\n"
+            "- objetivo_especifico\n"
+            "- objetivo_geral\n"
+            "- objetivo_estrategico\n"
+            "- problema\n"
+            "- causa\n"
+            "- justificativa\n"
+            "- evidencia\n"
+            "- entrega\n"
+            "- publico_alvo\n"
+            "- marco_legal\n"
+            "- articulacao_federativa\n\n"
+            "Retorne apenas uma lista JSON com as chaves exatas, por exemplo: [\"problema\", \"justificativa\"]"
+        )
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": pergunta}
+            ],
+            temperature=0
+        )
+        try:
+            return json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            st.warning("⚠️ A resposta da LLM não pôde ser convertida em JSON. Nenhum tipo filtrado será aplicado.")
+            return None
+
+    except Exception as e:
+        print(f"⚠️ Erro ao inferir tipo com LLM: {e}")
+        return None
 
 
 def handle_chat(options):
@@ -55,10 +99,22 @@ def handle_chat(options):
         for idx in options['selected_indices']:
             index = load_index_bundle(idx, embedder)
             results = index.similarity_search(query, k=options["top_k_retrieval"])
-            retrieved_chunks.extend(results)  # Mantém como `Document` para preservar metadados
+            retrieved_chunks.extend(results)
 
-        # Filtro por tipo, baseado na pergunta
-        tipos_desejados = inferir_tipos_relevantes(prompt)
+        # 🔍 Inferir tipos desejados
+        with st.expander("🧠 Tipos inferidos com base na pergunta", expanded=False):
+            tipos_regex = inferir_tipos_relevantes_regex(prompt)
+            st.write("🔍 Detecção via regex:", tipos_regex)
+
+            tipos_desejados = tipos_regex
+
+            if not tipos_desejados and options["llm_choice"] == "GPT-4":
+                st.write("⚠️ Nenhum tipo identificado por regex. Chamando LLM...")
+                tipos_desejados = inferir_tipos_com_llm(prompt)
+                st.write("🤖 Tipos sugeridos pela LLM:", tipos_desejados)
+
+
+        # 🧹 Filtrar chunks pelos tipos identificados
         if tipos_desejados:
             retrieved_chunks = [
                 doc for doc in retrieved_chunks
@@ -69,21 +125,21 @@ def handle_chat(options):
             st.warning("Nenhum chunk relevante encontrado com base nos filtros aplicados.")
             return
 
-        # Apresenta os chunks recuperados inicialmente
+        # Mostrar chunks recuperados
         with st.expander("🔎 Chunks Recuperados (antes do reranking)", expanded=False):
             for i, doc in enumerate(retrieved_chunks, 1):
                 st.markdown(f"**Chunk {i}:**")
                 st.markdown(f"`Metadados:` `{doc.metadata}`")
                 st.markdown(f"```\n{doc.page_content}\n```")
 
-        # Rerank
+        # Reranking
         cross_encoder = CrossEncoder(options['reranker_model'])
         pairs = [[prompt, doc.page_content] for doc in retrieved_chunks]
         scores = cross_encoder.predict(pairs)
         ranked = sorted(zip(scores, retrieved_chunks), reverse=True)
         reranked_chunks = [doc.page_content for score, doc in ranked[:options['top_k_rerank']]]
 
-        # Mostrar após rerank
+        # Mostrar pós-rerank
         with st.expander("🏆 Chunks Selecionados após Reranking", expanded=True):
             for i, (score, doc) in enumerate(ranked[:options['top_k_rerank']], 1):
                 st.markdown(f"**#{i} — Score: {score:.4f}**")
@@ -108,9 +164,8 @@ def handle_chat(options):
             "🔁 Agora responda:"
         )
 
-        # Escolha do modelo
+        # LLM
         llm = options["llm_choice"]
-
         if llm == "GPT-4":
             client = OpenAI()
             response = client.chat.completions.create(
@@ -136,10 +191,14 @@ def handle_chat(options):
         elif llm == "Copilot":
             response_text = "⚠️ O modelo Copilot ainda não foi implementado."
 
-        # Mostra resposta
+        # Mostrar resposta
         with st.chat_message("assistant"):
             st.markdown(response_text)
 
         # Histórico
         st.session_state.messages.append({"role": "user", "content": prompt})
         st.session_state.messages.append({"role": "assistant", "content": response_text})
+
+        with st.expander("🧾 Resumo do processamento", expanded=False):
+            st.markdown(f"- **Tipos usados no filtro:** `{tipos_desejados or 'Nenhum (todos considerados)'}`")
+            st.markdown(f"- **Chunks reranqueados:** {len(reranked_chunks)}")
