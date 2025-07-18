@@ -11,3 +11,5 @@ torchvision
 torchaudio
 openai
 langchain-huggingface
+tiktoken
+PyPDF2

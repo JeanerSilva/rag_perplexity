@@ -5,7 +5,7 @@ from typing import List
 import tiktoken
 
 # Configurações
-pdf_path = "Espelho_SIOP_1752688760490.pdf"  # Altere para seu caminho
+pdf_path = "Espelho_SIOP_1752869188991.pdf"  # Altere para seu caminho
 output_path = "programas_chunked_tokenlimit_300.jsonl"
 token_limit = 300
 
@@ -14,11 +14,12 @@ enc = tiktoken.get_encoding("cl100k_base")
 
 # Campos que queremos extrair
 campos_fixos = [
-    "Órgão", "Tipo de Programa", "Objetivos Estratégicos", "Público Alvo", "Problema",
+    "Programa", "Orgão", "Tipo de Programa", "Objetivos Estratégicos", "Público Alvo", "Problema",
     "Causa do problema", "Evidências do problema", "Justificativa para a intervenção",
     "Evolução histórica", "Comparações Internacionais", "Relação com os ODS",
     "Agentes Envolvidos", "Articulação federativa", "Enfoque Transversal",
-    "Marco Legal", "Planos nacionais, setoriais e regionais"
+    "Marco Legal", "Planos nacionais, setoriais e regionais", "Objetivo Geral", "Objetivo Específico", "Objetivos Específicos", 
+    "Entregas", "Entrega"
 ]
 
 # Função para extrair seções
