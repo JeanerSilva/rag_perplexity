@@ -12,6 +12,10 @@ def inferir_tipos_relevantes_regex(pergunta):
     pergunta = pergunta.lower()
     tipos = []
 
+    if re.search(r"programa", pergunta):
+        tipos.append("programa_codigo")    
+    if re.search(r"programa", pergunta):
+        tipos.append("programa_nome")
     if re.search(r"\bobjetiv[oa]s?\s+específic[oa]s?\b", pergunta):
         tipos.append("objetivo_especifico")
     if re.search(r"\bobjetiv[oa]s?\s+gerais?\b", pergunta):
@@ -19,13 +23,13 @@ def inferir_tipos_relevantes_regex(pergunta):
     if re.search(r"\bobjetiv[oa]s?\s+estratégic[oa]s?\b", pergunta):
         tipos.append("objetivo_estrategico")
     if re.search(r"\bproblema\b|\bproblemas?\b", pergunta):
-        tipos.append("problema")
+        tipos.append("evidências_do_problema")
     if re.search(r"\bcausa\b|\bcausas\b", pergunta):
         tipos.append("causa")
     if re.search(r"\bjustificativa\b|\bpor que\b|\bporque\b", pergunta):
         tipos.append("justificativa")
     if re.search(r"\bevid[êe]ncia\b|\bevid[êe]ncias\b", pergunta):
-        tipos.append("evidencia")
+        tipos.append("evidências_do_problema")
     if re.search(r"\bentregas?\b|\bresultados?\b", pergunta):
         tipos.append("entrega")
     if re.search(r"\bp[úu]blico[- ]?alvo\b", pergunta):
@@ -118,7 +122,7 @@ def handle_chat(options):
         if tipos_desejados:
             retrieved_chunks = [
                 doc for doc in retrieved_chunks
-                if doc.metadata.get("tipo") in tipos_desejados
+                if doc.metadata.get("campos_presentes") in tipos_desejados
             ]
 
         if not retrieved_chunks:
