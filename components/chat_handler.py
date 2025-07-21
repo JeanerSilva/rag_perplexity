@@ -25,6 +25,23 @@ def extrair_programa_da_pergunta(pergunta):
 
     return codigo, nome
 
+def normalizar_tipo(texto):
+    return (
+        texto.lower()
+        .replace("ç", "c")
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("â", "a")
+        .replace("ê", "e")
+        .replace("ô", "o")
+        .replace("ã", "a")
+        .replace("õ", "o")
+        .replace(" ", "_")
+    )
+
 def inferir_tipos_relevantes_regex(pergunta):
     pergunta = pergunta.lower()
     tipos = []
@@ -133,6 +150,11 @@ def handle_chat(options):
                 print(f"  → Chunk {i+1}: campos_presentes={r.metadata.get('campos_presentes')}, metadados={r.metadata}")
             retrieved_chunks.extend(results)
 
+        print(f"📄 [DEBUG] Total de chunks antes do filtro: {len(retrieved_chunks)}")
+        st.write(f"🔍 Recuperados {len(results)} chunks de `{idx}`")
+        for i, r in enumerate(results):
+            st.markdown(f"- Chunk {i+1} — campos_presentes: `{r.metadata.get('campos_presentes')}`, programa: `{r.metadata.get('programa_codigo')}`")
+
         with st.expander("🧠 Tipos inferidos com base na pergunta", expanded=False):
             tipos_regex = inferir_tipos_relevantes_regex(prompt)
             st.write("🔍 Detecção via regex:", tipos_regex)
@@ -156,12 +178,15 @@ def handle_chat(options):
         if tipos_desejados:
           retrieved_chunks = [
                 doc for doc in retrieved_chunks
-                if any(t in doc.metadata.get("campos_presentes", []) for t in tipos_desejados)
+                if any(
+                    normalizar_tipo(t) in [normalizar_tipo(c) for c in (doc.metadata.get("campos_presentes") or [])]
+                    for t in tipos_desejados
+                )
                 and (
                     (not codigo_desejado or doc.metadata.get("programa_codigo") == codigo_desejado)
                     or (nome_desejado and nome_desejado in doc.metadata.get("programa_nome", "").lower())
                 )
-          ]
+            ]
 
         print(f"📄 [DEBUG] Total de chunks após filtro: {len(retrieved_chunks)}")
         if retrieved_chunks:
@@ -173,6 +198,7 @@ def handle_chat(options):
         if not retrieved_chunks:
             st.warning("Nenhum chunk relevante encontrado com base nos filtros aplicados.")
             return
+
 
         with st.expander("🔎 Chunks Recuperados (antes do reranking)", expanded=False):
             for i, doc in enumerate(retrieved_chunks, 1):
