@@ -7,12 +7,32 @@ from openai import OpenAI
 import re
 import json
 
+def extrair_programa_da_pergunta(pergunta):
+    """
+    Extrai o código e o nome do programa a partir da pergunta do usuário.
+    Retorna: (programa_codigo, programa_nome)
+    """
+    codigo = None
+    nome = None
+
+    match_codigo = re.search(r'programa\s+(\d+)', pergunta.lower())
+    if match_codigo:
+        codigo = match_codigo.group(1)
+
+    match_nome = re.search(r'programa\s+(?:\d+\s*[-–]\s*)?(.+?)(?:[?.!]|$)', pergunta, re.IGNORECASE)
+    if match_nome:
+        nome = match_nome.group(1).strip().lower()
+
+    return codigo, nome
+
 def inferir_tipos_relevantes_regex(pergunta):
     pergunta = pergunta.lower()
     tipos = []
 
     if re.search(r"programa", pergunta):
-        tipos.append("programa_codigo")    
+        tipos.append("programa_codigo") 
+    if re.search(r"\bevolu[çc][ãa]o hist[óo]rica\b", pergunta):
+        tipos.append("evolucao_historica")   
     if re.search(r"programa", pergunta):
         tipos.append("programa_nome")
     if re.search(r"\bobjetiv[oa]s?\s+específic[oa]s?\b", pergunta):
@@ -25,8 +45,8 @@ def inferir_tipos_relevantes_regex(pergunta):
         tipos.append("evidências_do_problema")
     if re.search(r"\bcausa\b|\bcausas\b", pergunta):
         tipos.append("causa")
-    if re.search(r"\bjustificativa\b|\bpor que\b|\bporque\b", pergunta):
-        tipos.append("justificativa")
+    if re.search(r"\bjustificativa\b|\bpor que\b|\bporque\b|\binterven[çc][ãa]o\b", pergunta):
+        tipos.append("justificativa_para_a_intervenção")
     if re.search(r"\bevid[êe]ncia\b|\bevid[êe]ncias\b", pergunta):
         tipos.append("evidências_do_problema")
     if re.search(r"\bentregas?\b|\bresultados?\b", pergunta):
@@ -37,6 +57,16 @@ def inferir_tipos_relevantes_regex(pergunta):
         tipos.append("marco_legal")
     if re.search(r"\barticula[çc][ãa]o federativa\b", pergunta):
         tipos.append("articulacao_federativa")
+    if re.search(r"\bcompara[çc][ãa]o internacional\b", pergunta):
+        tipos.append("comparações_internacionais")
+    if re.search(r"\brela[çc][ãa]o com ODS\b", pergunta):
+        tipos.append("relação_com_ODS")
+    if re.search(r"\benfoque transvers[alis]\b", pergunta):
+        tipos.append("enfoque_transversal")
+    if re.search(r"\bmarco[s] lega[alis]\b", pergunta):
+        tipos.append("marco_legal")
+
+        
 
     return tipos or None
 
@@ -117,14 +147,21 @@ def handle_chat(options):
         st.write("🔍 Tipos usados para filtragem:", tipos_desejados)
         print(f"🔍 [DEBUG] Tipos desejados: {tipos_desejados}")
         print(f"📄 [DEBUG] Total de chunks antes do filtro: {len(retrieved_chunks)}")
+
+        codigo_desejado, nome_desejado = extrair_programa_da_pergunta(prompt)
+
         for i, doc in enumerate(retrieved_chunks, 1):
             print(f"  → Chunk {i}: campos_presentes={doc.metadata.get('campos_presentes')}")
 
         if tipos_desejados:
-            retrieved_chunks = [
+          retrieved_chunks = [
                 doc for doc in retrieved_chunks
-                if set(tipos_desejados) & set(doc.metadata.get("campos_presentes", []))
-            ]
+                if any(t in doc.metadata.get("campos_presentes", []) for t in tipos_desejados)
+                and (
+                    (not codigo_desejado or doc.metadata.get("programa_codigo") == codigo_desejado)
+                    or (nome_desejado and nome_desejado in doc.metadata.get("programa_nome", "").lower())
+                )
+          ]
 
         print(f"📄 [DEBUG] Total de chunks após filtro: {len(retrieved_chunks)}")
         if retrieved_chunks:
@@ -146,7 +183,7 @@ def handle_chat(options):
         cross_encoder = CrossEncoder(options['reranker_model'])
         pairs = [[prompt, doc.page_content] for doc in retrieved_chunks]
         scores = cross_encoder.predict(pairs)
-        ranked = sorted(zip(scores, retrieved_chunks), reverse=True)
+        ranked = sorted(zip(scores, retrieved_chunks), key=lambda x: x[0], reverse=True)
         reranked_chunks = [doc.page_content for score, doc in ranked[:options['top_k_rerank']]]
 
         with st.expander("🏆 Chunks Selecionados após Reranking", expanded=True):
