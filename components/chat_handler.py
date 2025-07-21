@@ -192,7 +192,10 @@ def handle_chat(options):
                 st.markdown(f"`Metadados:` `{doc.metadata}`")
                 st.markdown(f"```\n{doc.page_content}\n```")
 
-        context = "\n\n".join(reranked_chunks)
+        context = "\n\n".join(
+            f"[campos_presentes: {doc.metadata.get('campos_presentes')}, programa_codigo: {doc.metadata.get('programa_codigo')}]\n{doc.page_content}"
+            for score, doc in ranked[:options['top_k_rerank']]
+        )
 
         system_prompt = (
             "Você é um assistente especializado na análise de documentos de planejamento público, com acesso a trechos "
@@ -200,12 +203,14 @@ def handle_chat(options):
             "Seu trabalho é responder com base **exclusivamente no conteúdo abaixo**, sem usar conhecimento externo ou fazer suposições.\n\n"
             f"📄 **Trechos do documento (contexto):**\n{context}\n\n"
             f"❓ **Pergunta:**\n{prompt}\n\n"
-            "📌 **Instruções de resposta**:\n"
-            "- Utilize os metadados dos chunks para identificar claramente o tipo de informação (ex: objetivo específico, problema, justificativa...)\n"
-            "- Liste sempre todos os que se referem ao mesmo programa, sem exceção.\n"
-            "- Se a resposta estiver nos trechos, **repita exatamente a mesma redação**.\n"
-            "- Nunca misture conceitos como objetivo geral, estratégico e específico.\n"
-            "- Ignore qualquer informação fora dos trechos. Responda com base **exclusiva** no que foi extraído.\n"
+                "📌 **Instruções de resposta**:"
+                "- Utilize os metadados dos chunks para identificar claramente o tipo de informação (ex: objetivo específico, problema, justificativa...)"
+                "- Liste sempre todos os que se referem ao mesmo programa, sem exceção."
+                "- Se a resposta estiver nos trechos, **repita exatamente a mesma redação**."
+                "- Sempre que a informação for uma lista (ex: causas, problemas, entregas), **responda com cada item em uma linha separada e formatada com `-` (hífen)**."
+                "- Não omita itens. Preserve a ordem dos elementos originais."
+                "- Não reescreva, resuma ou agrupe os itens — apenas formate em lista."
+                "- Ignore qualquer informação fora dos trechos. Responda com base **exclusiva** no que foi extraído."
             "🔁 Agora responda:"
         )
 

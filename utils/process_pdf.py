@@ -90,7 +90,7 @@ def split_text_into_chunks(text: str, token_limit: int) -> List[str]:
 def extract_section(text: str, start_label: str, end_labels: List[str]) -> str:
     pattern = rf"{re.escape(start_label)}\s*:(.*?)(?=" + "|".join([rf"{re.escape(lbl)}\s*:" for lbl in end_labels]) + r"|$)"
     match = re.search(pattern, text, re.DOTALL)
-    return match.group(1).strip() if match else "" map
+    return match.group(1).strip() if match else "" 
 
 def process_pdf_to_jsonl(pdf_path: str, output_path: str, token_limit: int = 300):
     reader = PdfReader(pdf_path)
