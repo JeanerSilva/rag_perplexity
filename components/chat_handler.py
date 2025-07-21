@@ -7,7 +7,6 @@ from openai import OpenAI
 import re
 import json
 
-
 def inferir_tipos_relevantes_regex(pergunta):
     pergunta = pergunta.lower()
     tipos = []
@@ -40,7 +39,6 @@ def inferir_tipos_relevantes_regex(pergunta):
         tipos.append("articulacao_federativa")
 
     return tipos or None
-
 
 def inferir_tipos_com_llm(pergunta):
     try:
@@ -79,17 +77,14 @@ def inferir_tipos_com_llm(pergunta):
         print(f"⚠️ Erro ao inferir tipo com LLM: {e}")
         return None
 
-
 def handle_chat(options):
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Renderiza mensagens anteriores
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Entrada do usuário
     if prompt := st.chat_input("Faça sua pergunta sobre os programas:"):
         retrieved_chunks = []
 
@@ -103,9 +98,11 @@ def handle_chat(options):
         for idx in options['selected_indices']:
             index = load_index_bundle(idx, embedder)
             results = index.similarity_search(query, k=options["top_k_retrieval"])
+            print(f"🔎 [DEBUG] {idx} — {len(results)} chunks recuperados.")
+            for i, r in enumerate(results):
+                print(f"  → Chunk {i+1}: campos_presentes={r.metadata.get('campos_presentes')}, metadados={r.metadata}")
             retrieved_chunks.extend(results)
 
-        # 🔍 Inferir tipos desejados
         with st.expander("🧠 Tipos inferidos com base na pergunta", expanded=False):
             tipos_regex = inferir_tipos_relevantes_regex(prompt)
             st.write("🔍 Detecção via regex:", tipos_regex)
@@ -117,33 +114,41 @@ def handle_chat(options):
                 tipos_desejados = inferir_tipos_com_llm(prompt)
                 st.write("🤖 Tipos sugeridos pela LLM:", tipos_desejados)
 
+        st.write("🔍 Tipos usados para filtragem:", tipos_desejados)
+        print(f"🔍 [DEBUG] Tipos desejados: {tipos_desejados}")
+        print(f"📄 [DEBUG] Total de chunks antes do filtro: {len(retrieved_chunks)}")
+        for i, doc in enumerate(retrieved_chunks, 1):
+            print(f"  → Chunk {i}: campos_presentes={doc.metadata.get('campos_presentes')}")
 
-        # 🧹 Filtrar chunks pelos tipos identificados
         if tipos_desejados:
             retrieved_chunks = [
                 doc for doc in retrieved_chunks
-                if doc.metadata.get("campos_presentes") in tipos_desejados
+                if set(tipos_desejados) & set(doc.metadata.get("campos_presentes", []))
             ]
+
+        print(f"📄 [DEBUG] Total de chunks após filtro: {len(retrieved_chunks)}")
+        if retrieved_chunks:
+            for i, doc in enumerate(retrieved_chunks, 1):
+                print(f"  ✅ Chunk {i} passou no filtro — campos_presentes: {doc.metadata.get('campos_presentes')}")
+        else:
+            print("⚠️ [DEBUG] Nenhum chunk passou no filtro. Verifique tipos ou metadados.")
 
         if not retrieved_chunks:
             st.warning("Nenhum chunk relevante encontrado com base nos filtros aplicados.")
             return
 
-        # Mostrar chunks recuperados
         with st.expander("🔎 Chunks Recuperados (antes do reranking)", expanded=False):
             for i, doc in enumerate(retrieved_chunks, 1):
                 st.markdown(f"**Chunk {i}:**")
                 st.markdown(f"`Metadados:` `{doc.metadata}`")
                 st.markdown(f"```\n{doc.page_content}\n```")
 
-        # Reranking
         cross_encoder = CrossEncoder(options['reranker_model'])
         pairs = [[prompt, doc.page_content] for doc in retrieved_chunks]
         scores = cross_encoder.predict(pairs)
         ranked = sorted(zip(scores, retrieved_chunks), reverse=True)
         reranked_chunks = [doc.page_content for score, doc in ranked[:options['top_k_rerank']]]
 
-        # Mostrar pós-rerank
         with st.expander("🏆 Chunks Selecionados após Reranking", expanded=True):
             for i, (score, doc) in enumerate(ranked[:options['top_k_rerank']], 1):
                 st.markdown(f"**#{i} — Score: {score:.4f}**")
@@ -152,7 +157,6 @@ def handle_chat(options):
 
         context = "\n\n".join(reranked_chunks)
 
-        # Prompt do sistema
         system_prompt = (
             "Você é um assistente especializado na análise de documentos de planejamento público, com acesso a trechos "
             "documentos relativos ao Plano Plurianual (PPA).\n"
@@ -168,7 +172,6 @@ def handle_chat(options):
             "🔁 Agora responda:"
         )
 
-        # LLM
         llm = options["llm_choice"]
         if llm == "GPT-4":
             client = OpenAI()
@@ -195,11 +198,9 @@ def handle_chat(options):
         elif llm == "Copilot":
             response_text = "⚠️ O modelo Copilot ainda não foi implementado."
 
-        # Mostrar resposta
         with st.chat_message("assistant"):
             st.markdown(response_text)
 
-        # Histórico
         st.session_state.messages.append({"role": "user", "content": prompt})
         st.session_state.messages.append({"role": "assistant", "content": response_text})
 

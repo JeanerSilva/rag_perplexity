@@ -11,7 +11,7 @@ def show_sidebar():
             "temperature": st.slider("Temperatura", 0.0, 1.0, 0.7),
             "reranker_model": st.selectbox("Reranker", ["BAAI/bge-reranker-large", "cross-encoder/ms-marco-MiniLM-L-6-v2"]),
             "embedding_model": st.selectbox("Modelo de Embedding", ["multilingual_e5_large", "bge-base-pt"]),
-            "chunk_size": st.slider("Tamanho do chunk (palavras)", 128, 1024, 256, step=64),
+            "chunk_size": st.slider("Tamanho do chunk (palavras)", 128, 1024, 300, step=50),
             "top_k_retrieval": st.slider("Top-K recuperação", 3, 60, 20),
             "top_k_rerank": st.slider("Top-K reranking", 1, 20, 10),
             "index_version": st.text_input("Versão do índice", value=DEFAULT_INDEX_VERSION),

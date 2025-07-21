@@ -2,7 +2,6 @@ import os, glob, json
 from config.settings import DATA_FOLDER
 from utils.embedding_utils import chunk_text, format_doc_e5
 
-
 def read_jsonl_files(jsonl_files, chunk_size, embedding_model):
     documents = []
 
@@ -17,19 +16,31 @@ def read_jsonl_files(jsonl_files, chunk_size, embedding_model):
                     texto = obj.get("texto", "")
                     metadados = {k: v for k, v in obj.items() if k != "texto"}
 
+                    # 💡 Garante que campos_presentes seja lista
+                    if "campos_presentes" in metadados:
+                        if isinstance(metadados["campos_presentes"], str):
+                            metadados["campos_presentes"] = [metadados["campos_presentes"]]
+                        elif not isinstance(metadados["campos_presentes"], list):
+                            metadados["campos_presentes"] = [str(metadados["campos_presentes"])]
+
                     if texto:
                         chunks = chunk_text(texto, chunk_size)
                         for i, chunk in enumerate(chunks):
+                            original_chunk = chunk
                             if embedding_model == "bge-base-pt":
                                 chunk = format_doc_e5(chunk)
 
-                            documents.append({
+                            doc = {
                                 "text": chunk,
                                 "metadata": {
                                     **metadados,
                                     "chunk_id": i + 1
                                 }
-                            })
+                            }
+
+                            print(f"📦 [DEBUG] Chunk gerado: ID={i+1}, Campos={doc['metadata'].get('campos_presentes')}")
+                            documents.append(doc)
+
         except Exception as e:
             print(f"❌ Erro ao ler {file}: {e}")
             continue
